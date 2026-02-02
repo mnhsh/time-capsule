@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: timecapsule
+    ports:
+      - "5433:5432"
+
+  rabbitmq:
+    build:
+      context: .
+      dockerfile: Dockerfile.rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566:4566"   # The edge port for all local AWS services
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+    volumes:
+      - "./localstack:/var/lib/localstack"
