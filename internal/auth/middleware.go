@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/mnhsh/time-capsule/internal/config"
+	response "github.com/mnhsh/time-capsule/internal/response"
 )
 
 type contextKey string
@@ -15,13 +16,13 @@ func WithAuthMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, err := GetBearerToken(r.Header)
 		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			response.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
 			return
 		}
 
 		userID, err := ValidateJWT(token, cfg.JWTSecret)
 		if err != nil {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			response.RespondWithError(w, http.StatusUnauthorized, "Invalid Token", err)
 			return
 		}
 
