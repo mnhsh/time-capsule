@@ -6,7 +6,7 @@ import (
 )
 
 type Config struct {
-	DB        *database.Queries
+	DB        database.Store
 	JWTSecret string
 	Storage   storage.S3Storage
 }

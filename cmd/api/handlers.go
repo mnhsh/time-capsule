@@ -1,7 +1,12 @@
 package api
 
 import (
+	"database/sql"
+	fmt "fmt"
 	"net/http"
+	time "time"
+
+	uuid "github.com/google/uuid"
 
 	"github.com/mnhsh/time-capsule/internal/auth"
 	"github.com/mnhsh/time-capsule/internal/config"
@@ -9,7 +14,15 @@ import (
 	response "github.com/mnhsh/time-capsule/internal/response"
 )
 
-func (cfg *config.Config) HandlerCreateCapsule(w http.ResponseWriter, r *http.Request) {
+type API struct {
+	cfg *config.Config
+}
+
+func NewAPI(cfg *config.Config) *API {
+	return &API{cfg: cfg}
+}
+
+func (a *API) HandlerCreateCapsule(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(auth.UserIDKey).(uuid.UUID)
 	if !ok {
 		response.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
@@ -26,6 +39,7 @@ func (cfg *config.Config) HandlerCreateCapsule(w http.ResponseWriter, r *http.Re
 		response.RespondWithError(w, http.StatusBadRequest, "error retrieving file", err)
 		return
 	}
+	defer file.Close()
 	title := r.FormValue("title")
 	unlockAtStr := r.FormValue("unlock_at")
 
@@ -36,20 +50,20 @@ func (cfg *config.Config) HandlerCreateCapsule(w http.ResponseWriter, r *http.Re
 	}
 
 	s3Key := fmt.Sprintf("%s/%s", userID, uuid.New().String())
-	err = cfg.Storage.Upload(r.Context(), s3Key, file)
+	err = a.cfg.Storage.Upload(r.Context(), s3Key, file)
 	if err != nil {
 		response.RespondWithError(w, http.StatusInternalServerError, "failed to upload file", err)
 		return
 	}
 	capsuleID := uuid.New()
-	err = cfg.DB.CreateCapsuleWithOutbox(r.Context(), database.CreateCapsuleParams{
+	err = a.cfg.DB.CreateCapsuleWithOutbox(r.Context(), database.CreateCapsuleParams{
 		ID:         capsuleID,
 		UserID:     userID,
-		Title:      database.NullString{String: title, Valid: title != ""},
+		Title:      sql.NullString{String: title, Valid: title != ""},
 		CreatedAt:  time.Now().UTC(),
 		S3key:      s3Key,
 		UnlockAt:   unlockAt.UTC(),
-		IsUnlocked: database.NullBool{Bool: false, Valid: true},
+		IsUnlocked: sql.NullBool{Bool: false, Valid: true},
 	})
 	if err != nil {
 		response.RespondWithError(w, http.StatusInternalServerError, "failed to save capsule metadata", err)

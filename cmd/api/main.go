@@ -12,14 +12,18 @@ import (
 )
 
 func main() {
-	db, _ := sql.Open("postgres", os.Getenv("DB_URL"))
-	queries := database.New(db)
+	db, err := sql.Open("postgres", os.Getenv("DB_URL"))
+	if err != nil {
+		log.Fatal("cannot connect to DB:", err)
+	}
+	store := database.NewStore(db)
 	cfg := &config.Config{
-		DB:        queries,
+		DB:        store,
 		JWTSecret: os.Getenv("JWT_SECRET"),
 	}
+	app := NewAPI(cfg)
 	mux := http.NewServeMux()
-	mux.Handle("POST /v1/capsules", auth.WithAuthMiddleware(cfg, http.HandlerFunc(cfg.HandlerCreateCapsule)))
-
+	createHandler := http.HandlerFunc(app.HandlerCreateCapsule)
+	mux.Handle("POST /v1/capsules", auth.WithAuthMiddleware(cfg, createHandler))
 	log.Fatal(http.ListenAndServe(":8081", mux))
 }
