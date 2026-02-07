@@ -13,11 +13,13 @@ import (
 type Querier interface {
 	CreateCapsule(ctx context.Context, arg CreateCapsuleParams) (Capsule, error)
 	CreateOutboxEvent(ctx context.Context, arg CreateOutboxEventParams) (Outbox, error)
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	GetCapsuleForUnlock(ctx context.Context, id uuid.UUID) (GetCapsuleForUnlockRow, error)
 	GetPendingOutboxEvents(ctx context.Context, limit int32) ([]Outbox, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	MarkAsUnlocked(ctx context.Context, id uuid.UUID) error
+	RevokeRefreshToken(ctx context.Context, token string) error
 	UpdateOutboxStatus(ctx context.Context, arg UpdateOutboxStatusParams) error
 }
 

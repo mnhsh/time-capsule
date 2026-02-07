@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	json "encoding/json"
 	fmt "fmt"
 	"net/http"
 	time "time"
@@ -71,5 +72,105 @@ func (a *API) HandlerCreateCapsule(w http.ResponseWriter, r *http.Request) {
 	}
 	response.RespondWithJSON(w, http.StatusCreated, map[string]uuid.UUID{
 		"id": capsuleID,
+	})
+}
+
+func (a *API) HandlerUsers(w http.ResponseWriter, r *http.Request) {
+	type request struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	req := request{}
+	err := decoder.Decode(&req)
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "couldn't decode request", err)
+		return
+	}
+
+	if req.Password == "" || req.Email == "" {
+		response.RespondWithError(w, http.StatusBadRequest, "email and password are required", nil)
+		return
+	}
+
+	hashedPassword, err := auth.HashPassword(req.Password)
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "couldn't hash password", err)
+		return
+	}
+
+	user, err := a.cfg.DB.CreateUser(r.Context(), database.CreateUserParams{
+		Email:          req.Email,
+		HashedPassword: hashedPassword,
+	})
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "couldn't create user", err)
+		return
+	}
+	response.RespondWithJSON(w, http.StatusCreated, user)
+}
+
+func (a *API) HandlerLogin(w http.ResponseWriter, r *http.Request) {
+	type request struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	type res struct {
+		AccessToken  string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	req := request{}
+	err := decoder.Decode(&req)
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "couldn't decode request", err)
+		return
+	}
+	user, err := a.cfg.DB.GetUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "incorrect email or password", err)
+		return
+	}
+	match, err := auth.CheckPasswordHash(req.Password, user.HashedPassword)
+	if err != nil {
+		response.RespondWithError(w, http.StatusUnauthorized, "incorrect email or password", err)
+		return
+	}
+	if !match {
+		response.RespondWithError(w, http.StatusUnauthorized, "incorrect email or password", nil)
+		return
+	}
+	accessToken, err := auth.MakeJwt(
+		user.ID,
+		a.cfg.JWTSecret,
+		time.Minute*15,
+	)
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "couldn't create access JWT", err)
+		return
+	}
+
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "couldn't create refresh JWT", err)
+		return
+	}
+
+	_, err = a.cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     refreshToken,
+		UserID:    user.ID,
+		ExpiresAt: time.Now().UTC().Add(time.Hour * 24 * 60),
+	})
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "couldn't save refresh token", err)
+		return
+	}
+
+	response.RespondWithJSON(w, http.StatusOK, res{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    900,
 	})
 }
