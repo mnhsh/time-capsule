@@ -11,3 +11,6 @@ WHERE id = $1 LIMIT 1;
 UPDATE capsule
 SET is_unlocked = true
 WHERE id = $1;
+
+-- name: GetCapsulesByUserID :many
+SELECT * FROM capsule WHERE user_id = $1 ORDER BY created_at DESC;

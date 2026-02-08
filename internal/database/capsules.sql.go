@@ -78,6 +78,41 @@ func (q *Queries) GetCapsuleForUnlock(ctx context.Context, id uuid.UUID) (GetCap
 	return i, err
 }
 
+const getCapsulesByUserID = `-- name: GetCapsulesByUserID :many
+SELECT id, user_id, title, created_at, s3key, unlock_at, is_unlocked FROM capsule WHERE user_id = $1 ORDER BY created_at DESC
+`
+
+func (q *Queries) GetCapsulesByUserID(ctx context.Context, userID uuid.UUID) ([]Capsule, error) {
+	rows, err := q.db.QueryContext(ctx, getCapsulesByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Capsule
+	for rows.Next() {
+		var i Capsule
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.CreatedAt,
+			&i.S3key,
+			&i.UnlockAt,
+			&i.IsUnlocked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markAsUnlocked = `-- name: MarkAsUnlocked :exec
 UPDATE capsule
 SET is_unlocked = true

@@ -16,8 +16,10 @@ type Querier interface {
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	GetCapsuleForUnlock(ctx context.Context, id uuid.UUID) (GetCapsuleForUnlockRow, error)
+	GetCapsulesByUserID(ctx context.Context, userID uuid.UUID) ([]Capsule, error)
 	GetPendingOutboxEvents(ctx context.Context, limit int32) ([]Outbox, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByRefreshToken(ctx context.Context, token string) (User, error)
 	MarkAsUnlocked(ctx context.Context, id uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, token string) error
 	UpdateOutboxStatus(ctx context.Context, arg UpdateOutboxStatusParams) error
