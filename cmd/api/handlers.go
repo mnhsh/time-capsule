@@ -75,17 +75,37 @@ func (a *API) HandlerCreateCapsule(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *API) handlerCapsuleRetrieve(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(auth.UserIDKey).(uuid.UUID)
+	if !ok {
+		response.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+	capsule, err := a.cfg.DB.GetCapsulesByUserID(r.Context(), userID)
+	if err != nil {
+		response.RespondWithError(w, http.StatusBadRequest, "couldn't get capsules", err)
+		return
+	}
+	response.RespondWithJSON(w, http.StatusOK, capsule)
+}
+
 func (a *API) HandlerUsers(w http.ResponseWriter, r *http.Request) {
 	type request struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 
+	type res struct {
+		ID        uuid.UUID `json:"id"`
+		Email     string    `json:"email"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
 	decoder := json.NewDecoder(r.Body)
 	req := request{}
 	err := decoder.Decode(&req)
 	if err != nil {
-		response.RespondWithError(w, http.StatusInternalServerError, "couldn't decode request", err)
+		response.RespondWithError(w, http.StatusBadRequest, "couldn't decode request", err)
 		return
 	}
 
@@ -108,7 +128,11 @@ func (a *API) HandlerUsers(w http.ResponseWriter, r *http.Request) {
 		response.RespondWithError(w, http.StatusInternalServerError, "couldn't create user", err)
 		return
 	}
-	response.RespondWithJSON(w, http.StatusCreated, user)
+	response.RespondWithJSON(w, http.StatusCreated, res{
+		ID:        user.ID,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+	})
 }
 
 func (a *API) HandlerLogin(w http.ResponseWriter, r *http.Request) {
@@ -125,12 +149,12 @@ func (a *API) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	req := request{}
 	err := decoder.Decode(&req)
 	if err != nil {
-		response.RespondWithError(w, http.StatusInternalServerError, "couldn't decode request", err)
+		response.RespondWithError(w, http.StatusBadRequest, "couldn't decode request", err)
 		return
 	}
 	user, err := a.cfg.DB.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
-		response.RespondWithError(w, http.StatusInternalServerError, "incorrect email or password", err)
+		response.RespondWithError(w, http.StatusUnauthorized, "incorrect email or password", err)
 		return
 	}
 	match, err := auth.CheckPasswordHash(req.Password, user.HashedPassword)
@@ -145,7 +169,7 @@ func (a *API) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	accessToken, err := auth.MakeJwt(
 		user.ID,
 		a.cfg.JWTSecret,
-		time.Minute*15,
+		time.Hour,
 	)
 	if err != nil {
 		response.RespondWithError(w, http.StatusInternalServerError, "couldn't create access JWT", err)
@@ -177,44 +201,37 @@ func (a *API) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) HandlerRefreshToken(w http.ResponseWriter, r *http.Request) {
 	type request struct {
-		RefreshToken string `json:"refresh_token"`
+		RefreshToken string    `json:"refresh_token"`
+		ExpiresAt    time.Time `json:"expires_at"`
+	}
+
+	type res struct {
+		Token string `json:"token"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	req := request{}
 	err := decoder.Decode(&req)
 	if err != nil {
-		response.RespondWithError(w, http.StatusInternalServerError, "couldn't decode request", err)
+		response.RespondWithError(w, http.StatusBadRequest, "couldn't decode request", err)
 		return
 	}
 
-	refreshToken, err := a.cfg.DB.GetRefreshToken(r.Context(), req.RefreshToken)
+	user, err := a.cfg.DB.GetUserByRefreshToken(r.Context(), req.RefreshToken)
 	if err != nil {
 		response.RespondWithError(w, http.StatusUnauthorized, "couldn't get user for refresh token", err)
 		return
 	}
-
-	if refreshToken.ExpiresAt < time.Now() || refreshToken.RevokedAt != nil {
-		response.RespondWithError(w, http.StatusBadRequest, "refresh token expired or revoked", nil)
-		return
-	}
-}
-
-func (a *API) handlerCapsuleRetrieve(w http.ResponseWriter, r *http.Request) {
-	token, err := auth.GetBearerToken(r.Header)
+	accessToken, err := auth.MakeJwt(
+		user.ID,
+		a.cfg.JWTSecret,
+		time.Hour,
+	)
 	if err != nil {
-		response.RespondWithError(w, http.StatusUnauthorized, "couldn't find jwt", err)
+		response.RespondWithError(w, http.StatusUnauthorized, "couldn't validate jwt", err)
 		return
 	}
-	userID, err := auth.ValidateJWT(token, a.cfg.JWTSecret)
-	if err != nil {
-		response.RespondWithError(w, http.StatusUnauthorized, "couldn't validate JWT", err)
-		return
-	}
-	capsule, err := a.cfg.DB.GetCapsulesByUserID(r.Context(), userID)
-	if err != nil {
-		response.RespondWithError(w, http.StatusBadRequest, "couldn't get capsules", err)
-		return
-	}
-	response.RespondWithJSON(w, http.StatusOK, capsule)
+	response.RespondWithJSON(w, http.StatusOK, res{
+		Token: accessToken,
+	})
 }
