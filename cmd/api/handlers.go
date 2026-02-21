@@ -19,11 +19,11 @@ type API struct {
 	cfg *config.Config
 }
 
-func NewAPI(cfg *config.Config) *API {
+func newAPI(cfg *config.Config) *API {
 	return &API{cfg: cfg}
 }
 
-func (a *API) HandlerCreateCapsule(w http.ResponseWriter, r *http.Request) {
+func (a *API) handlerCreateCapsule(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(auth.UserIDKey).(uuid.UUID)
 	if !ok {
 		response.RespondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
@@ -90,7 +90,7 @@ func (a *API) handlerCapsuleRetrieve(w http.ResponseWriter, r *http.Request) {
 	response.RespondWithJSON(w, http.StatusOK, capsule)
 }
 
-func (a *API) HandlerUsers(w http.ResponseWriter, r *http.Request) {
+func (a *API) handlerUsers(w http.ResponseWriter, r *http.Request) {
 	type request struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -136,7 +136,7 @@ func (a *API) HandlerUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) HandlerLogin(w http.ResponseWriter, r *http.Request) {
+func (a *API) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	type request struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -200,7 +200,7 @@ func (a *API) HandlerLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) HandlerRefreshToken(w http.ResponseWriter, r *http.Request) {
+func (a *API) handlerRefreshToken(w http.ResponseWriter, r *http.Request) {
 	type request struct {
 		RefreshToken string    `json:"refresh_token"`
 		ExpiresAt    time.Time `json:"expires_at"`
@@ -235,4 +235,20 @@ func (a *API) HandlerRefreshToken(w http.ResponseWriter, r *http.Request) {
 	response.RespondWithJSON(w, http.StatusOK, res{
 		Token: accessToken,
 	})
+}
+
+func (a *API) handlerRevoke(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		response.RespondWithError(w, http.StatusBadRequest, "couldn't find token", err)
+		return
+	}
+
+	err = a.cfg.DB.RevokeRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		response.RespondWithError(w, http.StatusInternalServerError, "couldn't revoke session", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
