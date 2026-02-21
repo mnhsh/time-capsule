@@ -67,6 +67,7 @@ func (a *API) HandlerCreateCapsule(w http.ResponseWriter, r *http.Request) {
 		IsUnlocked: sql.NullBool{Bool: false, Valid: true},
 	})
 	if err != nil {
+		_ = a.cfg.Storage.Delete(r.Context(), s3Key)
 		response.RespondWithError(w, http.StatusInternalServerError, "failed to save capsule metadata", err)
 		return
 	}
