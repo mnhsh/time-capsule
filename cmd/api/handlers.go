@@ -196,14 +196,13 @@ func (a *API) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	response.RespondWithJSON(w, http.StatusOK, res{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    900,
+		ExpiresIn:    3600,
 	})
 }
 
 func (a *API) handlerRefreshToken(w http.ResponseWriter, r *http.Request) {
 	type request struct {
-		RefreshToken string    `json:"refresh_token"`
-		ExpiresAt    time.Time `json:"expires_at"`
+		RefreshToken string `json:"refresh_token"`
 	}
 
 	type res struct {
